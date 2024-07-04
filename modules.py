@@ -53,8 +53,7 @@ class Vault:
     def add_password(user, user_id, site, password):
         user_encrypt = rsa.encrypt(user.encode(), public_key)
         user_64 = base64.b64encode(user_encrypt).decode("utf-8")
-        hash_alg.update(user.upper().encode())
-        user_hash = hash_alg.hexdigest()
+        user_hash = hashing_func(user.upper())
 
         psw_encrypt = rsa.encrypt(password.encode(), public_key)
         psw_64 = base64.b64encode(psw_encrypt).decode('utf-8')
@@ -71,21 +70,21 @@ class Vault:
 
     @staticmethod
     def get_password(user, site):
-        hash_alg.update(user.encode())
-        user_hash = hash_alg.hexdigest()
+        user_hash = hashing_func(user.upper())
+        print("1 check")
 
         for usr in psw_col.find({"usr": user_hash, "site": site.upper()}):
+            print("2 Check")
             psw_64 = usr['password']
             psw_decode = base64.b64decode(psw_64)
             psw = rsa.decrypt(psw_decode, private_key)
             psw = psw.decode()
-            print(f"[Collecting Password...]: The password is: {psw}")
+            return f"The password is: '{psw}' "
 
     @staticmethod
     def update_password(user, site, new_password):
         # update password
-        hash_alg.update(user.upper().encode())
-        user_hash = hash_alg.hexdigest()
+        user_hash = hashing_func(user)
 
         psw_encrypt = rsa.encrypt(new_password.encode(), public_key)
         psw_64 = base64.b64encode(psw_encrypt).decode("utf-8")
@@ -97,7 +96,7 @@ class Vault:
     def delete_password(user, site):
         user_hash = hashing_func(user.upper())
 
-        deleted = psw_col.delete_one({"usr": user_hash, "site": site.upper()})
+        deleted = psw_col.delete_one({"usr": user_hash})
         print(deleted)
         print(user_hash)
         print(["DELETE SUCCESSFUL!"])
@@ -105,82 +104,25 @@ class Vault:
 
 def hashing_func(text):
     hashing_alg = hashlib.sha256()
-    # text = text.encode()
     hashing_alg.update(text.encode())
     return hashing_alg.hexdigest()
 
 
-def login_user(username):
+def login_user(username, password, text_field, psw_input, user_input):
     usr_hash = hashing_func(username.upper())
-    # psw_hash = hashing_func(password)
+    psw_hash = hashing_func(password)
 
     user_exists = users.find_one({"username": usr_hash})
     if not user_exists:
-        print(f"User: '{username}' is not recognised!")
+        text_field.insert("end", f"User: '{username}' is not recognised! \n")
+        user_input.delete(0, "end")
+        return None
     else:
         psw = user_exists.get("password")
-        count = 0
-        while True:
-            if count == 3:
-                print("Failed more than 3 times!")
-                break
-
-            password = input("Enter Password: ")
-            psw_hash = hashing_func(password)
-
-            if psw_hash == psw:
-                print(f"Login Successful!")
-                print(f"Welcome '{username}'")
-                user_id = user_exists.get("_id")
-                return user_id
-                # break
-            else:
-                print("Wrong Password!, Try again")
-                count += 1
-                print(f'[Number of Tries Left]: {3-count}')
-
-
-def psw_vault(user_id):
-    print("[Vault is now running...]", f"Time: {datetime.now()}")
-    a = 'Press "A" to add new password'
-    g = 'Press "G" to get password'
-    u = 'Press "U" to update user'
-    d = 'Press "D" to delete user'
-    q = "Press 'Q' to quite!"
-
-    method = input(f'{a} \n{g} \n{u} \n{d} \n{q} \n: ')
-
-    if method.upper() == 'A':
-        print("[Add Password!]")
-        user = input("Enter Username or Email: ")
-        site = input("Enter the site: ")
-        psw = input("Enter the password: ")
-        Vault.add_password(user=user, user_id=user_id, site=site, password=psw)
-
-    elif method.upper() == 'G':
-        print("Get Password!")
-        user = input("Enter username: ")
-        site = input("Enter site: ")
-        Vault.get_password(user=user, site=site)
-
-    elif method.upper() == 'U':
-        print("Update User")
-        user = input("Enter username: ")
-        site = input("Enter site: ")
-        psw = input("Enter new Password: ")
-        Vault.update_password(user=user, site=site, new_password=psw)
-
-    elif method.upper() == 'D':
-        print(["Delete User "])
-        user = input("Enter Username or Email: ")
-        site = input("Enter site: ")
-
-        Vault.delete_password(user=user, site=site)
-    elif method.upper() == "Q":
-        print("Quite!!")
-        logged_in = False
-        return logged_in
-    else:
-        print(f"Failed to understand Input: {method}")
-        logged_in = False
-        return logged_in
+        if psw_hash == psw:
+            text_field.insert("end", "Login Successful! \n")
+            return user_exists.get("_id")
+        else:
+            text_field.insert("end", "Login Failed! \n")
+            psw_input.delete(0, "end")
+            return None
